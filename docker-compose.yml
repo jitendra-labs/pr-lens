@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: prlens
+    ports:
+      - "5442:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - prlens_net
+  
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pr_lens_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./app/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/prlens
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Passed directly from your host environment (.env file)
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./app:/app
+      - /tmp:/tmp
+  
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: prlens_ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - prlens_net
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  prlens_net:
+    driver: bridge
